@@ -1,7 +1,6 @@
 import os
 import sys
 import pandas as pd
-import logging
 import uuid
 from datetime import datetime
 from sqlalchemy import create_engine
