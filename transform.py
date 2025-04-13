@@ -1,3 +1,5 @@
+import sys
+from datetime import datetime
 import pandas as pd
 from sqlalchemy import text, create_engine
 from utils import configure_logger, get_db_connection_string
@@ -68,7 +70,7 @@ def create_staging_schema(engine):
         channel_id INTEGER NOT NULL,
         date_id DATE NOT NULL,
         quantity INTEGER NOT NULL,
-        price NUMERIC(10, 2) NOT NULL,
+        unit_price NUMERIC(10, 2) NOT NULL,
         total_amount NUMERIC(12, 2) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (product_id) REFERENCES staging.dim_product (product_id),
@@ -404,11 +406,164 @@ def populate_dim_date(engine, start_date='2024-01-01', end_date='2025-12-31'):
         raise
 
 def process_sales_data(engine):
-    populate_dim_channel(engine)
-    populate_dim_location(engine)
-    populate_dim_product(engine)
-    populate_dim_retailer(engine)
-    populate_dim_date(engine)
+    """
+    Process and transform sales data from raw to fact table.
+    """
+    
+    try:
+        # Get dimension lookups
+        channel_ids = populate_dim_channel(engine)
+        location_ids = populate_dim_location(engine)
+        product_ids = populate_dim_product(engine)
+        retailer_ids = populate_dim_retailer(engine)
+        date_ids = populate_dim_date(engine)
+        
+        # Query to get raw sales data
+        query = """
+        SELECT "SaleID", "ProductID", "RetailerID", "Channel", "Location", 
+               "Quantity", "Price", "Date"
+        FROM raw.sales
+        WHERE "SaleID" NOT IN (
+            SELECT sale_id::VARCHAR FROM staging.fact_sales
+        )
+        ORDER BY "SaleID" ASC
+        """
+        
+        with engine.connect() as conn:
+            # Count total records to process
+            count_query = """
+            SELECT COUNT(*) FROM raw.sales
+            WHERE "SaleID" NOT IN (
+                SELECT sale_id::VARCHAR FROM staging.fact_sales
+            )
+            """
+            result = conn.execute(text(count_query))
+            total_records = result.fetchone()[0]
+            logger.info(f"Found {total_records} new sales records to process")
+            
+            if total_records == 0:
+                logger.info("No new records to process")
+                return 0
+            
+            result = conn.execute(text(query))
+            sales = [dict(zip(result.keys(), row)) for row in result]
+            
+            # Transform data
+            logger.info(f"Processing {len(sales)} sales records")
+            processed_count = 0
+            fact_records = []
+            for sale in sales:
+                try:
+                    # Clean and transform data
+                    sale_id = int(sale["SaleID"])
+                    
+                    # Skip if product or retailer not in dimension tables
+                    if sale["ProductID"] not in product_ids or sale["RetailerID"] not in retailer_ids:
+                        logger.warning(f"Skipping sale {sale_id}: Missing dimension references")
+                        continue
+                    
+                    product_id = product_ids[sale["ProductID"]]
+                    retailer_id = retailer_ids[sale["RetailerID"]]
+                    
+                    # Get channel ID
+                    channel = sale["Channel"]
+                    channel_id = channel_ids.get(channel)
+                    if not channel_id:
+                        logger.warning(f"Unknown channel '{channel}' for sale {sale_id}")
+                        continue
+                    
+                    # Get location ID
+                    location = sale["Location"]
+                    location_id = location_ids.get(location)
+                    if not location_id:
+                        logger.warning(f"Unknown location '{location}' for sale {sale_id}")
+                        continue
+                    
+                    # Parse quantity
+                    try:
+                        quantity = int(sale["Quantity"])
+                        if quantity < 0:
+                            logger.warning(f"Skipping sale {sale_id}: Negative quantity '{sale['Quantity']}'")
+                            continue
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid quantity '{sale['Quantity']}' for sale {sale_id}")
+                    except:
+                        logger.error(f"Unexpected error parsing quantity for sale {sale_id}: {str(e)}")
+                        continue
+                    
+                    # Parse price
+                    try:
+                        # Remove any currency symbols or text
+                        price_str = str(sale["Price"]).replace('USD', '').strip()
+                        unit_price = float(price_str) / quantity
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid price '{sale['Price']}' for sale {sale_id}")
+                    except:
+                        logger.error(f"Unexpected error parsing price for sale {sale_id}: {str(e)}")
+                        continue
+                    
+                    total_amount = float(price_str)
+                    
+                    # Parse date
+                    try:
+                        # Handle different date formats
+                        date_str = sale["Date"]
+                        if '/' in date_str:
+                            date_obj = datetime.strptime(date_str, '%Y/%m/%d')
+                        else:
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        date_id = date_obj.strftime('%Y-%m-%d')
+                        if date_id not in date_ids:
+                            logger.warning(f"Date '{date_id}' not in date dimension for sale {sale_id}")
+                            continue
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid date '{sale['Date']}' for sale {sale_id}, skipping")
+                        continue
+                    
+                    # Create fact record
+                    fact_record = {
+                        "sale_id": sale_id,
+                        "product_id": product_id,
+                        "retailer_id": retailer_id,
+                        "location_id": location_id,
+                        "channel_id": channel_id,
+                        "date_id": date_id,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "total_amount": total_amount
+                    }
+                    fact_records.append(fact_record)
+                except Exception as e:
+                    logger.error(f"Error processing sale {sale['SaleID']}: {str(e)}")
+            
+            # Insert fact records
+            if fact_records:
+                try:
+                    insert_query = """
+                    INSERT INTO staging.fact_sales (
+                        sale_id, product_id, retailer_id, location_id, 
+                        channel_id, date_id, quantity, unit_price, total_amount
+                    )
+                    VALUES (
+                        :sale_id, :product_id, :retailer_id, :location_id, 
+                        :channel_id, :date_id, :quantity, :unit_price, :total_amount
+                    )
+                    ON CONFLICT (sale_id) DO NOTHING
+                    """
+                    # Use a new transaction to ensure atomicity
+                    with engine.begin() as insert_conn:
+                        insert_conn.execute(text(insert_query), fact_records)
+                    
+                    processed_count = len(fact_records)
+                    logger.info(f"Inserted {len(fact_records)} records into fact_sales")
+                except Exception as e:
+                    logger.error(f"Error inserting: {str(e)}")
+            
+            logger.info(f"Successfully processed {processed_count} sales records")
+            return processed_count
+    except Exception as e:
+        logger.error(f"Error processing sales data: {str(e)}")
+        raise
 
 def main():
     """
@@ -427,10 +582,18 @@ def main():
         create_staging_schema(engine)
 
         # Process sales data
-        process_sales_data(engine)
+        processed_count = process_sales_data(engine)
+        
+        logger.info(f"Data transformation complete. {processed_count} records processed.")
+        return processed_count
         
     except Exception as e:
+        logger.error(f"Error in data transformation process: {str(e)}")
         raise
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Data transformation failed: {str(e)}")
+        sys.exit(1)
