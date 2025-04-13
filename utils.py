@@ -13,7 +13,9 @@ def configure_logger(name):
     logger = logging.getLogger(name)
     if not logger.hasHandlers():  # Avoid duplicate handlers
         logger.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            '%(asctime)s - %(filename)s - %(funcName)s - %(levelname)s - %(message)s'
+            )
 
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
