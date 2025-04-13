@@ -5,31 +5,10 @@ import logging
 import uuid
 from datetime import datetime
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
+from utils import get_db_connection_string, configure_logger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("data_processing.log")
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = configure_logger(__name__)
 
-# Load environment variables
-load_dotenv()
-
-def get_db_connection_string():
-    """Get the database connection string from environment variables or use default"""
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5433")
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD", "mysecretpassword")
-    database = os.getenv("DB_NAME", "sales")
-    
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 def clean_data(df):
     """
