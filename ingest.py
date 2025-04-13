@@ -77,7 +77,7 @@ def validate_data(df):
     df_copy = df.copy()
     try:
         invalid_qty = df_copy[df_copy['Quantity'].apply(
-            lambda x: not (x.isdigit() or (x.startswith('-') and x[1:].isdigit()))
+            lambda x: not x.isdigit() or (x.startswith('-') and x[1:].isdigit())
         )]
         if not invalid_qty.empty:
             logger.warning(f"Found {len(invalid_qty)} records with invalid quantity values")
