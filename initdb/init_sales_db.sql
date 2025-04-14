@@ -1,5 +1,3 @@
-CREATE DATABASE sales;
-
 \c sales
 
 -- Create schema for raw data

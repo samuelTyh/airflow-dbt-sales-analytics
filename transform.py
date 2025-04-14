@@ -88,9 +88,8 @@ def create_staging_schema(engine):
     """
     
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             conn.execute(text(create_tables_sql))
-            conn.commit()
         logger.info("Successfully created staging schema and tables")
     except Exception as e:
         logger.error(f"Error creating staging schema and tables: {str(e)}")
@@ -111,7 +110,7 @@ def populate_dim_product(engine):
     
     try:
         # Get unique products
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             result = conn.execute(text(query))
             products = [dict(zip(["product_id", "product_name", "brand", "category"], row)) for row in result]
         
@@ -130,7 +129,7 @@ def populate_dim_product(engine):
             SELECT product_id FROM staging.dim_product WHERE product_id = :product_id
             """
             
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 result = conn.execute(text(check_query), {"product_id": product_id})
                 row = result.fetchone()
                 
@@ -162,7 +161,6 @@ def populate_dim_product(engine):
                         "brand": product["brand"],
                         "category": product["category"]
                     })
-                conn.commit()
                 product_ids[product["product_id"]] = product_id
         
         logger.info(f"Successfully populated product dimension table with {len(product_ids)} products")
@@ -186,7 +184,7 @@ def populate_dim_retailer(engine):
     
     try:
         # Get unique retailers
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             result = conn.execute(text(query))
             retailers = [dict(zip(["retailer_id", "retailer_name"], row)) for row in result]
         
@@ -205,7 +203,7 @@ def populate_dim_retailer(engine):
             SELECT retailer_id FROM staging.dim_retailer WHERE retailer_id = :retailer_id
             """
             
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 result = conn.execute(text(check_query), {"retailer_id": retailer_id})
                 row = result.fetchone()
                 
@@ -231,7 +229,6 @@ def populate_dim_retailer(engine):
                         "retailer_id": retailer_id,
                         "retailer_name": retailer["retailer_name"]
                     })
-                conn.commit()
                 retailer_ids[retailer["retailer_id"]] = retailer_id
         
         logger.info(f"Successfully populated retailer dimension table with {len(retailer_ids)} retailers")
@@ -253,7 +250,7 @@ def populate_dim_location(engine):
     
     try:
         # Get unique locations
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             result = conn.execute(text(query))
             locations = [row[0] for row in result]
         
@@ -266,7 +263,7 @@ def populate_dim_location(engine):
             SELECT location_id FROM staging.dim_location WHERE location_name = :location
             """
             
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 result = conn.execute(text(check_query), {"location": location})
                 row = result.fetchone()
                 
@@ -281,7 +278,6 @@ def populate_dim_location(engine):
                     """
                     result = conn.execute(text(insert_query), {"location": location})
                     location_id = result.fetchone()[0]
-                    conn.commit()
                 
                 location_ids[location] = location_id
         
@@ -304,7 +300,7 @@ def populate_dim_channel(engine):
     
     try:
         # Get unique channels
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             result = conn.execute(text(query))
             channels = [row[0] for row in result]
         
@@ -316,7 +312,7 @@ def populate_dim_channel(engine):
             SELECT channel_id FROM staging.dim_channel WHERE channel_name = :channel
             """
             
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 result = conn.execute(text(check_query), {"channel": channel})
                 row = result.fetchone()
                 
@@ -331,7 +327,6 @@ def populate_dim_channel(engine):
                     """
                     result = conn.execute(text(insert_query), {"channel": channel})
                     channel_id = result.fetchone()[0]
-                    conn.commit()
                 
                 channel_ids[channel] = channel_id
         
@@ -377,7 +372,7 @@ def populate_dim_date(engine, start_date='2024-01-01', end_date='2025-12-31'):
             })
         
         # Insert dates into dimension table
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             for record in date_records:
                 # Check if date already exists
                 check_query = """
@@ -397,7 +392,6 @@ def populate_dim_date(engine, start_date='2024-01-01', end_date='2025-12-31'):
                     )
                     """
                     conn.execute(text(insert_query), record)
-            conn.commit()
         
         logger.info(f"Successfully populated date dimension table with {len(date_records)} dates")
         return [record["date_id"] for record in date_records]
@@ -429,7 +423,7 @@ def process_sales_data(engine):
         ORDER BY "SaleID" ASC
         """
         
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             # Count total records to process
             count_query = """
             SELECT COUNT(*) FROM raw.sales
