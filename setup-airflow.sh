@@ -4,12 +4,6 @@ set -e
 mkdir -p airflow/dags airflow/logs airflow/plugins data/processed
 chmod +x initdb/create-multiple-postgres-databases.sh
 
-# Check if CSV file exists
-if [ ! -f "data/generated-sales-data.csv" ]; then
-  echo "IMPORTANT: Copy the generated-sales-data.csv file to the data/ directory before starting Airflow."
-  cp generated-sales-data.csv data/
-fi
-
 # Set environment variable for Airflow UID
 export AIRFLOW_UID=$(id -u)
 

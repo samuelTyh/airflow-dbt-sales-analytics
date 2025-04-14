@@ -7,18 +7,18 @@ from utils import configure_logger, get_db_connection_string
 logger = configure_logger(__name__)
 
 
-def create_staging_schema(engine):
+def create_transformed_schema(engine):
     """
-    Create the staging schema and tables.
+    Create the transformed schema and tables.
     """
-    logger.info("Creating staging schema and tables...")
+    logger.info("Creating transformed schema and tables...")
     
     create_tables_sql = """
-    -- Create staging tables
-    CREATE SCHEMA IF NOT EXISTS staging;
+    -- Create transformed tables
+    CREATE SCHEMA IF NOT EXISTS transformed;
     
     -- Dimension tables
-    CREATE TABLE IF NOT EXISTS staging.dim_product (
+    CREATE TABLE IF NOT EXISTS transformed.dim_product (
         product_id INTEGER PRIMARY KEY,
         product_name VARCHAR(255) NOT NULL,
         brand VARCHAR(100),
@@ -27,28 +27,28 @@ def create_staging_schema(engine):
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     
-    CREATE TABLE IF NOT EXISTS staging.dim_retailer (
+    CREATE TABLE IF NOT EXISTS transformed.dim_retailer (
         retailer_id INTEGER PRIMARY KEY,
         retailer_name VARCHAR(255) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     
-    CREATE TABLE IF NOT EXISTS staging.dim_location (
+    CREATE TABLE IF NOT EXISTS transformed.dim_location (
         location_id SERIAL PRIMARY KEY,
         location_name VARCHAR(255) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     
-    CREATE TABLE IF NOT EXISTS staging.dim_channel (
+    CREATE TABLE IF NOT EXISTS transformed.dim_channel (
         channel_id SERIAL PRIMARY KEY,
         channel_name VARCHAR(50) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     
-    CREATE TABLE IF NOT EXISTS staging.dim_date (
+    CREATE TABLE IF NOT EXISTS transformed.dim_date (
         date_id DATE PRIMARY KEY,
         day INTEGER NOT NULL,
         month INTEGER NOT NULL,
@@ -62,7 +62,7 @@ def create_staging_schema(engine):
     );
     
     -- Fact table
-    CREATE TABLE IF NOT EXISTS staging.fact_sales (
+    CREATE TABLE IF NOT EXISTS transformed.fact_sales (
         sale_id INTEGER PRIMARY KEY,
         product_id INTEGER NOT NULL,
         retailer_id INTEGER NOT NULL,
@@ -73,26 +73,26 @@ def create_staging_schema(engine):
         unit_price NUMERIC(10, 2) NOT NULL,
         total_amount NUMERIC(12, 2) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES staging.dim_product (product_id),
-        FOREIGN KEY (retailer_id) REFERENCES staging.dim_retailer (retailer_id),
-        FOREIGN KEY (location_id) REFERENCES staging.dim_location (location_id),
-        FOREIGN KEY (channel_id) REFERENCES staging.dim_channel (channel_id),
-        FOREIGN KEY (date_id) REFERENCES staging.dim_date (date_id)
+        FOREIGN KEY (product_id) REFERENCES transformed.dim_product (product_id),
+        FOREIGN KEY (retailer_id) REFERENCES transformed.dim_retailer (retailer_id),
+        FOREIGN KEY (location_id) REFERENCES transformed.dim_location (location_id),
+        FOREIGN KEY (channel_id) REFERENCES transformed.dim_channel (channel_id),
+        FOREIGN KEY (date_id) REFERENCES transformed.dim_date (date_id)
     );
     
     -- Create indexes for better performance
-    CREATE INDEX IF NOT EXISTS idx_fact_sales_product_id ON staging.fact_sales(product_id);
-    CREATE INDEX IF NOT EXISTS idx_fact_sales_retailer_id ON staging.fact_sales(retailer_id);
-    CREATE INDEX IF NOT EXISTS idx_fact_sales_date_id ON staging.fact_sales(date_id);
-    CREATE INDEX IF NOT EXISTS idx_fact_sales_channel_id ON staging.fact_sales(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_fact_sales_product_id ON transformed.fact_sales(product_id);
+    CREATE INDEX IF NOT EXISTS idx_fact_sales_retailer_id ON transformed.fact_sales(retailer_id);
+    CREATE INDEX IF NOT EXISTS idx_fact_sales_date_id ON transformed.fact_sales(date_id);
+    CREATE INDEX IF NOT EXISTS idx_fact_sales_channel_id ON transformed.fact_sales(channel_id);
     """
     
     try:
         with engine.begin() as conn:
             conn.execute(text(create_tables_sql))
-        logger.info("Successfully created staging schema and tables")
+        logger.info("Successfully created transformed schema and tables")
     except Exception as e:
-        logger.error(f"Error creating staging schema and tables: {str(e)}")
+        logger.error(f"Error creating transformed schema and tables: {str(e)}")
         raise
 
 def populate_dim_product(engine):
@@ -126,7 +126,7 @@ def populate_dim_product(engine):
             
             # Check if product already exists
             check_query = """
-            SELECT product_id FROM staging.dim_product WHERE product_id = :product_id
+            SELECT product_id FROM transformed.dim_product WHERE product_id = :product_id
             """
             
             with engine.begin() as conn:
@@ -136,7 +136,7 @@ def populate_dim_product(engine):
                 if row:
                     # Update existing product if needed
                     update_query = """
-                    UPDATE staging.dim_product
+                    UPDATE transformed.dim_product
                     SET product_name = :product_name,
                         brand = :brand,
                         category = :category,
@@ -152,7 +152,7 @@ def populate_dim_product(engine):
                 else:
                     # Insert new product
                     insert_query = """
-                    INSERT INTO staging.dim_product (product_id, product_name, brand, category)
+                    INSERT INTO transformed.dim_product (product_id, product_name, brand, category)
                     VALUES (:product_id, :product_name, :brand, :category)
                     """
                     conn.execute(text(insert_query), {
@@ -200,7 +200,7 @@ def populate_dim_retailer(engine):
             
             # Check if retailer already exists
             check_query = """
-            SELECT retailer_id FROM staging.dim_retailer WHERE retailer_id = :retailer_id
+            SELECT retailer_id FROM transformed.dim_retailer WHERE retailer_id = :retailer_id
             """
             
             with engine.begin() as conn:
@@ -210,7 +210,7 @@ def populate_dim_retailer(engine):
                 if row:
                     # Update existing retailer if needed
                     update_query = """
-                    UPDATE staging.dim_retailer
+                    UPDATE transformed.dim_retailer
                     SET retailer_name = :retailer_name,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE retailer_id = :retailer_id
@@ -222,7 +222,7 @@ def populate_dim_retailer(engine):
                 else:
                     # Insert new retailer
                     insert_query = """
-                    INSERT INTO staging.dim_retailer (retailer_id, retailer_name)
+                    INSERT INTO transformed.dim_retailer (retailer_id, retailer_name)
                     VALUES (:retailer_id, :retailer_name)
                     """
                     conn.execute(text(insert_query), {
@@ -260,7 +260,7 @@ def populate_dim_location(engine):
         for location in locations:
             # Check if location already exists
             check_query = """
-            SELECT location_id FROM staging.dim_location WHERE location_name = :location
+            SELECT location_id FROM transformed.dim_location WHERE location_name = :location
             """
             
             with engine.begin() as conn:
@@ -272,7 +272,7 @@ def populate_dim_location(engine):
                 else:
                     # Insert new location
                     insert_query = """
-                    INSERT INTO staging.dim_location (location_name)
+                    INSERT INTO transformed.dim_location (location_name)
                     VALUES (:location)
                     RETURNING location_id
                     """
@@ -309,7 +309,7 @@ def populate_dim_channel(engine):
         for channel in channels:
             # Check if channel already exists
             check_query = """
-            SELECT channel_id FROM staging.dim_channel WHERE channel_name = :channel
+            SELECT channel_id FROM transformed.dim_channel WHERE channel_name = :channel
             """
             
             with engine.begin() as conn:
@@ -321,7 +321,7 @@ def populate_dim_channel(engine):
                 else:
                     # Insert new channel
                     insert_query = """
-                    INSERT INTO staging.dim_channel (channel_name)
+                    INSERT INTO transformed.dim_channel (channel_name)
                     VALUES (:channel)
                     RETURNING channel_id
                     """
@@ -376,13 +376,13 @@ def populate_dim_date(engine, start_date='2024-01-01', end_date='2025-12-31'):
             for record in date_records:
                 # Check if date already exists
                 check_query = """
-                SELECT date_id FROM staging.dim_date WHERE date_id = :date_id
+                SELECT date_id FROM transformed.dim_date WHERE date_id = :date_id
                 """
                 result = conn.execute(text(check_query), {"date_id": record["date_id"]})
                 if not result.fetchone():
                     # Insert new date
                     insert_query = """
-                    INSERT INTO staging.dim_date (
+                    INSERT INTO transformed.dim_date (
                         date_id, day, month, year, quarter, 
                         day_of_week, day_name, month_name, is_weekend
                     )
@@ -418,7 +418,7 @@ def process_sales_data(engine):
                "Quantity", "Price", "Date"
         FROM raw.sales
         WHERE "SaleID" NOT IN (
-            SELECT sale_id::VARCHAR FROM staging.fact_sales
+            SELECT sale_id::VARCHAR FROM transformed.fact_sales
         )
         ORDER BY "SaleID" ASC
         """
@@ -428,7 +428,7 @@ def process_sales_data(engine):
             count_query = """
             SELECT COUNT(*) FROM raw.sales
             WHERE "SaleID" NOT IN (
-                SELECT sale_id::VARCHAR FROM staging.fact_sales
+                SELECT sale_id::VARCHAR FROM transformed.fact_sales
             )
             """
             result = conn.execute(text(count_query))
@@ -534,7 +534,7 @@ def process_sales_data(engine):
             if fact_records:
                 try:
                     insert_query = """
-                    INSERT INTO staging.fact_sales (
+                    INSERT INTO transformed.fact_sales (
                         sale_id, product_id, retailer_id, location_id, 
                         channel_id, date_id, quantity, unit_price, total_amount
                     )
@@ -561,7 +561,7 @@ def process_sales_data(engine):
 
 def main():
     """
-    Main function to transform and load data from raw to staging schema.
+    Main function to transform and load data from raw to transformed schema.
     """
     logger.info("Starting data transformation process")
     
@@ -572,8 +572,8 @@ def main():
         # Create SQLAlchemy engine
         engine = create_engine(connection_string)
         
-        # Create staging schema and tables
-        create_staging_schema(engine)
+        # Create transformed schema and tables
+        create_transformed_schema(engine)
 
         # Process sales data
         processed_count = process_sales_data(engine)
