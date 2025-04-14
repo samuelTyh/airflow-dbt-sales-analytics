@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
 
-# Make initialization script executable
+mkdir -p airflow/dags airflow/logs airflow/plugins data/processed
 chmod +x initdb/create-multiple-postgres-databases.sh
 
 # Check if CSV file exists
