@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: fact_sales
+    description: "Fact table for sales with related dimension keys"
+    columns:
+      - name: sale_id
+        description: "The primary key for the sales transaction"
+        tests:
+          - unique
+          - not_null
+      
+      - name: product_id
+        description: "Foreign key to product dimension"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_product')
+              field: product_id
+      
+      - name: retailer_id
+        description: "Foreign key to retailer dimension"
+        tests:
+          - not_null
+      
+      - name: location_id
+        description: "Foreign key to location dimension"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_id
+      
+      - name: channel_id
+        description: "Foreign key to channel dimension"
+        tests:
+          - not_null
+      
+      - name: date_id
+        description: "Foreign key to date dimension"
+        tests:
+          - not_null
+      
+      - name: quantity
+        description: "Number of items sold"
+        tests:
+          - not_null
+          - positive_values
+      
+      - name: unit_price
+        description: "Price per unit (price / quantity)"
+        tests:
+          - not_null
+          - positive_values
+      
+      - name: total_amount
+        description: "Total sale amount (original price column)"
+        tests:
+          - not_null
+          - positive_values

@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_sales
+    description: "Staging model for sales data with basic cleaning and transformations"
+    columns:
+      - name: sale_id
+        description: "The primary key for the sales record"
+        tests:
+          - unique
+          - not_null
+      
+      - name: product_id
+        description: "Foreign key to the product dimension"
+        tests:
+          - not_null
+      
+      - name: retailer_id
+        description: "Foreign key to the retailer dimension"
+        tests:
+          - not_null
+      
+      - name: quantity
+        description: "Number of items sold"
+        tests:
+          - not_null
+          - positive_values
+      
+      - name: price
+        description: "Sale price per unit"
+        tests:
+          - not_null
+          - positive_values
+      
+      - name: date
+        description: "Date of the sale"
+        tests:
+          - not_null
