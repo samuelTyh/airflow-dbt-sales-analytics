@@ -1,6 +1,6 @@
 # Sales Data Pipeline
 
-This project implements a complete data engineering pipeline for processing sales data, from ingestion to analytics-ready dimensional models.
+This project implements a complete data engineering pipeline for processing sales data, from ingestion to analytics-ready dimensional models based on the data exploration in [notebook](./misc/exploration.ipynb).
 
 ## Features
 
