@@ -9,7 +9,7 @@ export AIRFLOW_UID=$(id -u)
 
 echo "Setup completed. Now start Airflow"
 docker-compose down --volumes
-docker-compose up -d
+docker-compose up --build -d
 sleep 10
 docker-compose exec airflow-webserver airflow users create \
     --username airflow \
