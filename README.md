@@ -94,6 +94,7 @@ python transform.py
 ```
 
 ### 6. Run dbt models (optional)
+In order to run dbt jobs, a local development environment must be installed.
 
 ```bash
 # Set up dbt profile
