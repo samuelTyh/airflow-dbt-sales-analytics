@@ -8,8 +8,8 @@ chmod +x initdb/create-multiple-postgres-databases.sh
 export AIRFLOW_UID=$(id -u)
 
 echo "Setup completed. Now start Airflow"
-docker-compose down --volumes
-docker-compose up --build -d
+docker-compose down -v --rmi local
+docker-compose up -d
 sleep 10
 docker-compose exec airflow-webserver airflow users create \
     --username airflow \
