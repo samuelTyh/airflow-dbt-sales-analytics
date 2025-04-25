@@ -1,5 +1,5 @@
 with source as (
-    select * from raw.sales
+    select * from {{ source('postgres', 'sales') }}
 ),
 
 cleaned as (

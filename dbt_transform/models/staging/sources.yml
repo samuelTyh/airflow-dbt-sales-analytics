@@ -1,0 +1,46 @@
+version: 2
+
+sources:
+  - name: postgres
+    description: 'Raw sales data stored in PostgreSQL'
+    database: sales
+    schema: raw
+    tables:
+      - name: sales
+        description: 'Raw sales data with basic information'
+        columns:
+          - name: SaleID
+            description: 'Unique identifier for each sale'
+          - name: ProductID
+            description: 'Identifier for the product sold'
+          - name: ProductName
+            description: 'Name of the product'
+          - name: Brand
+            description: 'Brand of the product'
+          - name: Category
+            description: 'Category the product belongs to'
+          - name: RetailerID
+            description: 'Identifier for the retailer'
+          - name: RetailerName
+            description: 'Name of the retailer'
+          - name: Channel
+            description: 'Sales channel (Online/Offline)'
+          - name: Location
+            description: 'Physical location for offline sales'
+          - name: Quantity
+            description: 'Number of items sold'
+          - name: Price
+            description: 'Total price of the sale'
+          - name: Date
+            description: 'Date when the sale occurred'
+          - name: inserted_at
+            description: 'Timestamp when record was inserted into raw table'
+          - name: batch_id
+            description: 'Identifier for the batch load'
+          - name: source_file
+            description: 'Original source file'
+        
+        loaded_at_field: inserted_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}

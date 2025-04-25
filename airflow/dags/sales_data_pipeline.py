@@ -10,8 +10,8 @@ import sys
 sys.path.append('/opt/airflow/project')
 
 try:
-    from ingest import main as ingest_main
-    from transform import main as transform_main
+    from data_ingestion import ingest_main
+    from data_ingestion import transform_main
 except ImportError as e:
     print(f"Error importing modules: {e}")
 

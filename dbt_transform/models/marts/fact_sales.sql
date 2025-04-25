@@ -1,3 +1,17 @@
+{{
+  config(
+    unique_key = 'sale_id',
+    indexes = [
+      {'columns': ['sale_id'], 'unique': True},
+      {'columns': ['product_id']},
+      {'columns': ['retailer_id']},
+      {'columns': ['location_id']},
+      {'columns': ['channel_id']},
+      {'columns': ['date_id']}
+    ]
+  )
+}}
+
 with stg_sales as (
     select * from {{ ref('stg_sales') }}
 ),
@@ -22,7 +36,7 @@ dim_retailer as (
 dim_channel as (
     select
         channel,
-        row_number() over (order by channel) as channel_id
+        {{ dbt_utils.generate_surrogate_key(['channel']) }} as channel_id
     from stg_sales
     group by channel
 ),
@@ -37,12 +51,15 @@ final as (
         c.channel_id,
         s.date as date_id,
         s.quantity,
-        s.price / s.quantity as unit_price,
-        s.price as total_amount,
+        s.price / nullif(s.quantity, 0)::numeric(10, 2) as unit_price, -- Prevent divide by zero
+        s.price::numeric(12, 2) as total_amount,
         s.transformed_at
     from stg_sales s
-    inner join dim_location l on s.location = l.location
-    inner join dim_channel c on s.channel = c.channel
+    inner join dim_location l on l.location = s.location
+    inner join dim_channel c on c.channel = s.channel
+    {% if is_incremental() %}
+    where s.transformed_at > (select max(transformed_at) from {{ this }})
+    {% endif %}
 )
 
 select * from final
