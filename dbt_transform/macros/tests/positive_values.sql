@@ -13,7 +13,7 @@ validation_errors as (
     where column_value <= 0
 )
 
-select count(*)
+select *
 from validation_errors
 
 {% endmacro %}
