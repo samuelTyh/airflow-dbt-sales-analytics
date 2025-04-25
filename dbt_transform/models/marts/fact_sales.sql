@@ -1,6 +1,14 @@
 {{
   config(
-    unique_key = 'sale_id'
+    unique_key = 'sale_id',
+    indexes = [
+      {'columns': ['sale_id'], 'unique': True},
+      {'columns': ['product_id']},
+      {'columns': ['retailer_id']},
+      {'columns': ['location_id']},
+      {'columns': ['channel_id']},
+      {'columns': ['date_id']}
+    ]
   )
 }}
 
@@ -43,8 +51,8 @@ final as (
         c.channel_id,
         s.date as date_id,
         s.quantity,
-        s.price / s.quantity as unit_price,
-        s.price as total_amount,
+        s.price / nullif(s.quantity, 0)::numeric(10, 2) as unit_price, -- Prevent divide by zero
+        s.price::numeric(12, 2) as total_amount,
         s.transformed_at
     from stg_sales s
     inner join dim_location l on l.location = s.location
