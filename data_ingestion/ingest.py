@@ -256,6 +256,7 @@ def load_to_raw(df, connection_string, file_path, table_name='sales'):
 def main(file_path):
     """
     Main function to process and load data.
+    New flow: Validate first, then clean only records that need cleaning.
     """
     logger.info(f"Starting data ingestion process for {file_path}")
     
@@ -265,25 +266,45 @@ def main(file_path):
         df = pd.read_csv(file_path)
         logger.info(f"Successfully read {len(df)} records from {file_path}")
         
-        # Clean and validate data
-        cleaned_df = clean_data(df)
-        validated_df = validate_data(cleaned_df)
+        # First validate the data as-is
+        is_valid, invalid_indices = validate_data(df)
+        
+        if not is_valid:
+            logger.info("Data validation failed. Applying cleaning steps...")
+            # Apply cleaning only after validation fails
+            df = CleanData.apply_all_cleaners(df)
+            
+            # Re-validate after cleaning
+            is_valid, invalid_indices = validate_data(df)
+            if not is_valid:
+                logger.warning("Data still contains invalid records after cleaning. Filtering them out.")
+                df = filter_invalid_records(df, invalid_indices)
+            else:
+                logger.info("Data cleaning resolved all validation issues.")
+        else:
+            logger.info("Data passed validation without cleaning.")
         
         # Check for duplicates
-        deduplicated_df = detect_duplicates(validated_df)
+        deduplicated_df = detect_duplicates(df)
         
-        # Get database connection string
-        connection_string = get_db_connection_string()
-        
-        # Load to raw schema
-        records_loaded = load_to_raw(deduplicated_df, connection_string, file_path)
-        
-        logger.info(f"Data ingestion complete. {records_loaded} records processed.")
-        return records_loaded
+        # Only proceed with loading if we have records
+        if len(deduplicated_df) > 0:
+            # Get database connection string
+            connection_string = get_db_connection_string()
+            
+            # Load to raw schema
+            records_loaded = load_to_raw(deduplicated_df, connection_string, file_path)
+            
+            logger.info(f"Data ingestion complete. {records_loaded} records processed.")
+            return records_loaded
+        else:
+            logger.warning("No valid records to load after validation and deduplication.")
+            return 0
         
     except Exception as e:
         logger.error(f"Error in data ingestion process: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
