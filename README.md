@@ -60,8 +60,8 @@ The project is configured with a `.python-version` file specifying Python 3.12, 
 Run the setup script to initialize Airflow and PostgreSQL:
 
 ```bash
-chmod +x setup-airflow.sh
-./setup-airflow.sh
+chmod +x scripts/*.sh
+./scripts/setup_airflow.sh
 ```
 
 This will:
@@ -90,7 +90,7 @@ Alternatively, you can run the pipeline components manually (Must set up local d
 python ingest.py data/generated_sales_data.csv
 
 # Transform data
-python transform.py
+python data_ingestion/transform.py
 ```
 
 ### 6. Run dbt models (optional)
@@ -101,10 +101,8 @@ In order to run dbt jobs, a local development environment must be installed.
 mkdir -p ~/.dbt
 cp misc/dbt_profile.yml ~/.dbt/profiles.yml
 
-# Run dbt models
-cd dbt_transform
-dbt run
-dbt test
+# Run dbt flow
+./scripts/run_dbt.sh -f
 ```
 
 ## Project Structure
@@ -115,17 +113,23 @@ dbt test
 │   └── dags/                     # Airflow DAG definitions
 ├── data/                         # Input data directory
 │   └── processed/                # Archived processed files
+├── data_ingestion/               # ETL process
+│   ├── ingest.py                 # Data ingestion script
+│   ├── transform.py              # Data transformation script
+│   └── utils.py                  # Shared utility functions
 ├── dbt_transform/                # dbt project
 │   ├── models/
 │   │   ├── marts/                # Dimensional models
 │   │   └── staging/              # Staging models
 │   └── macros/                   # dbt macros/tests
-├── ingest.py                     # Data ingestion script
-├── transform.py                  # Data transformation script
-├── utils.py                      # Shared utility functions
+├── initdb/                       # Database initialization
+├── misc/                         # Miscellaneous, including task description, data exploration and dbt profile
+├── scripts/                      # Execution scripts
+│   ├── setup-airflow.sh          # Airflow setup script
+│   └── run_dbt.sh                # dbt running script
 ├── docker-compose.yml            # Docker Compose configuration
 ├── Dockerfile.airflow            # Airflow container definition
-└── setup-airflow.sh              # Setup script
+└── requirements-airflow          # Airflow dependencies
 ```
 
 ## Data Models
