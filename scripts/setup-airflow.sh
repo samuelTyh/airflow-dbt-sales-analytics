@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+PROJECT_ROOT="$(dirname "$(dirname "$0")")"
+cd "$PROJECT_ROOT"
+
 mkdir -p airflow/dags airflow/logs airflow/plugins data/processed
 chmod +x initdb/create-multiple-postgres-databases.sh
 
