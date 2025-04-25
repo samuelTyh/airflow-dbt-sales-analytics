@@ -9,44 +9,86 @@ from .utils import get_db_connection_string, configure_logger
 logger = configure_logger(__name__)
 
 
-def clean_data(df):
+class CleanData:
     """
-    Clean the data by handling missing values and correcting data types.
+    A class for handling different types of data cleaning operations.
+    Each method handles a specific type of cleaning.
     """
-    logger.info("Cleaning data...")
-    cleaned_df = df.copy()
     
-    # Handle missing values
-    cleaned_df['Location'] = cleaned_df['Location'].fillna('Unknown')
+    @staticmethod
+    def handle_missing_values(df):
+        """Handle missing values in the DataFrame."""
+        logger.info("Cleaning: Handling missing values...")
+        df_cleaned = df.copy()
+        df_cleaned['Location'] = df_cleaned['Location'].fillna('Unknown')
+        return df_cleaned
     
-    # Keep all columns as strings for the raw layer (will be properly transformed in later stages)
-    for col in cleaned_df.columns:
-        cleaned_df[col] = cleaned_df[col].astype(str)
+    @staticmethod
+    def standardize_data_types(df):
+        """Convert all columns to strings for the raw layer."""
+        logger.info("Cleaning: Standardizing data types...")
+        df_cleaned = df.copy()
+        for col in df_cleaned.columns:
+            df_cleaned[col] = df_cleaned[col].astype(str)
+        return df_cleaned
     
-    # Set whitespace to None
-    cleaned_df = cleaned_df.replace(' ', None)
+    @staticmethod
+    def remove_whitespace_values(df):
+        """Replace whitespace-only values with None."""
+        logger.info("Cleaning: Removing whitespace values...")
+        df_cleaned = df.copy()
+        df_cleaned = df_cleaned.replace(' ', None)
+        return df_cleaned
     
-    logger.info(f"Data cleaning complete. {len(cleaned_df)} rows processed.")
-    return cleaned_df
-
-def detect_duplicates(df, key_columns=['SaleID']):
-    """
-    Detect duplicate records based on specified key columns.
-    """
-    logger.info(f"Checking for duplicate records based on {key_columns}...")
-    
-    # Get count of duplicates
-    duplicate_count = df.duplicated(subset=key_columns, keep='first').sum()
-    
-    if duplicate_count > 0:
-        logger.warning(f"Found {duplicate_count} duplicate records")
-        # Remove duplicates, keeping the first occurrence
-        df = df.drop_duplicates(subset=key_columns, keep='first')
-        logger.info(f"Removed duplicates. {len(df)} records remaining.")
-    else:
-        logger.info("No duplicates found.")
+    @staticmethod
+    def clean_price_values(df):
+        """Clean price values by removing currency symbols."""
+        logger.info("Cleaning: Cleaning price values...")
+        df_cleaned = df.copy()
         
-    return df
+        # Handle price with currency notation
+        df_cleaned.loc[df_cleaned['Price'].str.contains('USD', na=False), 'Price'] = \
+            df_cleaned.loc[df_cleaned['Price'].str.contains('USD', na=False), 'Price'].str.replace('USD', '')
+        
+        # Strip whitespace
+        df_cleaned['Price'] = df_cleaned['Price'].str.strip()
+        
+        return df_cleaned
+    
+    @staticmethod
+    def clean_date_values(df):
+        """Standardize date formats."""
+        logger.info("Cleaning: Standardizing date formats...")
+        df_cleaned = df.copy()
+        
+        # Convert different date formats to ISO format
+        for idx, date_str in enumerate(df_cleaned['Date']):
+            try:
+                if isinstance(date_str, str) and date_str:
+                    if '/' in date_str:
+                        date_obj = datetime.strptime(date_str, '%Y/%m/%d')
+                        df_cleaned.at[idx, 'Date'] = date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                # Leave invalid dates as is - they'll be caught in validation
+                pass
+                
+        return df_cleaned
+    
+    @classmethod
+    def apply_all_cleaners(cls, df):
+        """Apply all cleaning methods in sequence."""
+        logger.info("Starting comprehensive data cleaning...")
+        
+        df_result = df.copy()
+        df_result = cls.handle_missing_values(df_result)
+        df_result = cls.standardize_data_types(df_result)
+        df_result = cls.remove_whitespace_values(df_result)
+        df_result = cls.clean_price_values(df_result)
+        df_result = cls.clean_date_values(df_result)
+        
+        logger.info(f"Comprehensive data cleaning complete. Processed {len(df_result)} rows.")
+        return df_result
+
 
 def validate_data(df):
     """
