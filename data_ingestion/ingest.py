@@ -4,7 +4,7 @@ import pandas as pd
 import uuid
 from datetime import datetime
 from sqlalchemy import create_engine
-from utils import get_db_connection_string, configure_logger
+from .utils import get_db_connection_string, configure_logger
 
 logger = configure_logger(__name__)
 

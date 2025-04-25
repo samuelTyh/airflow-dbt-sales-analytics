@@ -2,7 +2,7 @@ import sys
 from datetime import datetime
 import pandas as pd
 from sqlalchemy import text, create_engine
-from utils import configure_logger, get_db_connection_string
+from .utils import configure_logger, get_db_connection_string
 
 logger = configure_logger(__name__)
 
