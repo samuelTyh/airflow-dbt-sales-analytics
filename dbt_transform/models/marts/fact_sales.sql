@@ -1,3 +1,10 @@
+{{
+  config(
+    materialized = 'incremental',
+    unique_key = 'sale_id'
+  )
+}}
+
 with stg_sales as (
     select * from {{ ref('stg_sales') }}
 ),
@@ -22,7 +29,7 @@ dim_retailer as (
 dim_channel as (
     select
         channel,
-        row_number() over (order by channel) as channel_id
+        {{ dbt_utils.generate_surrogate_key(['channel']) }} as channel_id
     from stg_sales
     group by channel
 ),
@@ -41,8 +48,11 @@ final as (
         s.price as total_amount,
         s.transformed_at
     from stg_sales s
-    inner join dim_location l on s.location = l.location
-    inner join dim_channel c on s.channel = c.channel
+    inner join dim_location l on l.location = s.location
+    inner join dim_channel c on c.channel = s.channel
+    {% if is_incremental() %}
+    where s.transformed_at > (select max(transformed_at) from {{ this }})
+    {% endif %}
 )
 
 select * from final
