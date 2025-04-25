@@ -92,12 +92,20 @@ class CleanData:
 
 def validate_data(df):
     """
-    Validate data quality and log any issues.
+    Validate data quality and identify invalid records.
+    Returns a boolean indicating if the data is valid and a list of invalid indices.
     """
-    logger.info("Validating data...")
+    logger.info(f"Validating data... Total records: {len(df)}")
+    
+    # Track invalid rows for logging
+    invalid_rows = {
+        'dates': [],
+        'quantities': [],
+        'prices': [],
+        'all': set()  # Use a set to avoid duplicates
+    }
     
     # Check for invalid dates
-    invalid_dates = []
     for idx, date_str in enumerate(df['Date']):
         try:
             # Try to parse the date
@@ -107,40 +115,118 @@ def validate_data(df):
                     datetime.strptime(date_str, '%Y/%m/%d')
                 else:
                     datetime.strptime(date_str, '%Y-%m-%d')
+            else:
+                # Empty or non-string date
+                invalid_rows['dates'].append((idx, date_str))
+                invalid_rows['all'].add(idx)
         except ValueError:
-            invalid_dates.append((idx, date_str))
+            invalid_rows['dates'].append((idx, date_str))
+            invalid_rows['all'].add(idx)
     
-    if invalid_dates:
-        logger.warning(f"Found {len(invalid_dates)} invalid date formats")
-        for idx, date_val in invalid_dates:
+    if invalid_rows['dates']:
+        logger.warning(f"Found {len(invalid_rows['dates'])} invalid date formats")
+        for idx, date_val in invalid_rows['dates'][:10]:  # Log first 10 to avoid excessive logging
             logger.warning(f"Row {idx}: Invalid date '{date_val}'")
+        if len(invalid_rows['dates']) > 10:
+            logger.warning(f"... and {len(invalid_rows['dates']) - 10} more invalid dates")
     
     # Check for invalid quantities (negative or non-numeric)
-    df_copy = df.copy()
-    try:
-        invalid_qty = df_copy[df_copy['Quantity'].apply(
-            lambda x: not x.isdigit() or (x.startswith('-') and x[1:].isdigit())
-        )]
-        if not invalid_qty.empty:
-            logger.warning(f"Found {len(invalid_qty)} records with invalid quantity values")
-            logger.warning(f"Found invalid quantity values in rows: {invalid_qty.index.tolist()}")
-    except:
-        logger.warning("Could not validate quantity values")
+    for idx, qty in enumerate(df['Quantity']):
+        try:
+            # Convert to string first to handle different input types
+            qty_str = str(qty).strip()
+            
+            # Check if it's a valid number
+            if not qty_str.lstrip('-').isdigit():
+                invalid_rows['all'].add(idx)
+                invalid_rows['quantities'].append((idx, qty))
+            # Check if it's negative
+            elif int(qty_str) <= 0:
+                invalid_rows['all'].add(idx)
+                invalid_rows['quantities'].append((idx, qty))
+        except Exception as e:
+            # Handle any unexpected errors during validation
+            invalid_rows['all'].add(idx)
+            invalid_rows['quantities'].append((idx, qty))
+            logger.warning(f"Error validating quantity in row {idx}: {str(e)}")
+    
+    if invalid_rows['quantities']:
+        logger.warning(f"Found {len(invalid_rows['quantities'])} records with invalid quantity values")
+        qty_sample = invalid_rows['quantities'][:10]
+        logger.warning(f"Invalid quantity samples: {qty_sample}")
     
     # Check for invalid prices (should be numeric)
-    try:
-        # Try to identify price values with currency symbols or other non-numeric characters
-        df_copy['PriceCheck'] = df_copy['Price'].str.replace('-', '')
-        invalid_price = df_copy[df_copy['PriceCheck'].apply(
-            lambda x: not x.replace('.', '').isdigit()
-        )]
-        if not invalid_price.empty:
-            logger.warning(f"Found {len(invalid_price)} records with invalid price formats")
-            logger.warning(f"Found invalid price values in rows: {invalid_price.index.tolist()}")
-    except:
-        logger.warning("Could not validate price values")
+    for idx, price in enumerate(df['Price']):
+        try:
+            # Convert to string and strip any whitespace
+            price_str = str(price).strip()
+            
+            # Handle price with currency notation (e.g., "100USD")
+            if price_str.endswith('USD'):
+                price_str = price_str.replace('USD', '').strip()
+            
+            # Try to parse as float to catch various numeric formats
+            float(price_str)
+            
+            # Additional check: price should be positive
+            if float(price_str) <= 0:
+                invalid_rows['prices'].append((idx, price))
+                invalid_rows['all'].add(idx)
+        except (ValueError, TypeError) as e:
+            invalid_rows['prices'].append((idx, price))
+            invalid_rows['all'].add(idx)
+        except Exception as e:
+            # Handle unexpected errors
+            invalid_rows['prices'].append((idx, price))
+            invalid_rows['all'].add(idx)
+            logger.warning(f"Error validating price in row {idx}: {str(e)}")
     
-    logger.info("Data validation complete.")
+    if invalid_rows['prices']:
+        logger.warning(f"Found {len(invalid_rows['prices'])} records with invalid price formats")
+        price_sample = invalid_rows['prices'][:10]
+        logger.warning(f"Invalid price samples: {price_sample}")
+    
+    if invalid_rows['all']:
+        logger.warning(f"Total invalid records: {len(invalid_rows['all'])}")
+        is_valid = False
+    else:
+        logger.info("All records are valid.")
+        is_valid = True
+    
+    return is_valid, list(invalid_rows['all'])
+
+
+def filter_invalid_records(df, invalid_indices):
+    """
+    Filter out invalid records from the DataFrame.
+    """
+    if not invalid_indices:
+        logger.info("No invalid records to filter.")
+        return df
+    
+    logger.info(f"Filtering out {len(invalid_indices)} invalid records...")
+    valid_df = df.drop(invalid_indices).reset_index(drop=True)
+    logger.info(f"After filtering: {len(valid_df)} valid records remain.")
+    return valid_df
+
+
+def detect_duplicates(df, key_columns=['SaleID']):
+    """
+    Detect duplicate records based on specified key columns.
+    """
+    logger.info(f"Checking for duplicate records based on {key_columns}...")
+    
+    # Get count of duplicates
+    duplicate_count = df.duplicated(subset=key_columns, keep='first').sum()
+    
+    if duplicate_count > 0:
+        logger.warning(f"Found {duplicate_count} duplicate records")
+        # Remove duplicates, keeping the first occurrence
+        df = df.drop_duplicates(subset=key_columns, keep='first')
+        logger.info(f"Removed duplicates. {len(df)} records remaining.")
+    else:
+        logger.info("No duplicates found.")
+        
     return df
 
 def load_to_raw(df, connection_string, file_path, table_name='sales'):
