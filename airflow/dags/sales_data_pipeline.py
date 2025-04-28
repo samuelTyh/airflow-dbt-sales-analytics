@@ -9,8 +9,10 @@ import sys
 # Register the path for docker-compose volume
 sys.path.append('/opt/airflow/project')
 
+# Import our data check utilities
+from utils.data_check import create_data_check_task
+
 try:
-    from data_ingestion import ingest_main
     from data_ingestion import transform_main
 except ImportError as e:
     print(f"Error importing modules: {e}")
@@ -51,14 +53,12 @@ check_file_exists = FileSensor(
     dag=dag,
 )
 
-# Task 2: Ingest data from CSV to raw DB layer
-def ingest_data_to_raw():
-    return ingest_main(csv_file_path)
-
-ingest_raw_data = PythonOperator(
-    task_id='ingest_raw_data',
-    python_callable=ingest_data_to_raw,
-    dag=dag,
+# Task 2: Check and ingest data if needed
+check_and_ingest_data = create_data_check_task(
+    dag=dag, 
+    csv_file_path=csv_file_path,
+    task_id="check_and_ingest_data",
+    conn_id="sales_db"
 )
 
 # Task 3: Transform data from raw to staging layer
@@ -76,4 +76,4 @@ archive_file = BashOperator(
 )
 
 # Define task dependencies
-check_file_exists >> ingest_raw_data >> transform_raw_data >> archive_file
+check_file_exists >> check_and_ingest_data >> transform_raw_data >> archive_file

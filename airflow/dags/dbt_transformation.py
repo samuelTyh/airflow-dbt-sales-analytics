@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.sensors.external_task import ExternalTaskSensor
-
+from airflow.operators.python import PythonOperator
+from utils.data_check import create_data_check_task
 
 # Define default arguments for the DAG
 default_args = {
@@ -14,6 +14,9 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
     'start_date': datetime(2024, 4, 14),
 }
+
+# Path to the CSV file for ingestion if needed
+CSV_FILE_PATH = '/opt/airflow/data/generated_sales_data.csv'
 
 # Set paths for dbt
 DBT_PROJECT_DIR = '/opt/airflow/project/dbt_transform'
@@ -51,15 +54,12 @@ cd {DBT_PROJECT_DIR} &&
 dbt test --profiles-dir {DBT_PROFILES_DIR} --target {DBT_TARGET}
 """
 
-# Wait for the sales_data_pipeline to complete
-wait_for_sales_pipeline = ExternalTaskSensor(
-    task_id='wait_for_sales_pipeline',
-    external_dag_id='sales_data_pipeline',
-    external_task_id='transform_raw_data',  # Wait for this task to complete
-    timeout=3600,
-    mode='reschedule',
-    poke_interval=60,
-    dag=dag,
+# Create a task that checks for data and ingests if necessary
+check_and_ingest_data = create_data_check_task(
+    dag=dag, 
+    csv_file_path=CSV_FILE_PATH,
+    task_id="check_and_ingest_data",
+    conn_id="sales_db"
 )
 
 # Define the dbt tasks
@@ -88,4 +88,4 @@ test_models = BashOperator(
 )
 
 # Define task dependencies
-wait_for_sales_pipeline >> install_dependencies >> run_staging_models >> run_mart_models >> test_models
+check_and_ingest_data >> install_dependencies >> run_staging_models >> run_mart_models >> test_models
