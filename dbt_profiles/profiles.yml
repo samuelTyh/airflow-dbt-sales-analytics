@@ -1,0 +1,26 @@
+dbt_transform:
+  target: airflow  # Default target for the container
+  outputs:
+    # Local development environment
+    dev:
+      type: postgres
+      host: localhost
+      port: 5433
+      user: postgres
+      password: mysecretpassword
+      dbname: sales
+      schema: dbt
+      threads: 4
+      keepalives_idle: 0
+    
+    # Airflow container environment
+    airflow:
+      type: postgres
+      host: postgres
+      port: 5432  # Internal Docker port
+      user: postgres
+      password: mysecretpassword
+      dbname: sales
+      schema: dbt
+      threads: 4
+      keepalives_idle: 0
