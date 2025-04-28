@@ -23,6 +23,7 @@ x-airflow-common:
     - ./airflow/plugins:/opt/airflow/plugins
     - ./data:/opt/airflow/data
     - ./:/opt/airflow/project  # Mount project files to access ingest.py, transform.py, etc.
+    - ./dbt_profiles:/opt/airflow/dbt_profiles  # Mount dbt profiles
   depends_on:
     &airflow-common-depends-on
     postgres:

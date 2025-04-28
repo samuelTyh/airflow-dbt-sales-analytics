@@ -7,8 +7,9 @@ This project implements a complete data engineering pipeline for processing sale
 - **Data Ingestion**: Automated CSV processing with data quality checks
 - **Data Storage**: PostgreSQL with proper schema design
 - **Data Transformation**: Both Python-based transformation and dbt models
-- **Orchestration**: Apache Airflow DAGs for end-to-end Python-based pipeline execution
+- **Orchestration**: Apache Airflow DAGs for end-to-end pipeline execution
 - **Containerization**: Docker setup for reproducible environments
+- **Integrated dbt Workflow**: dbt executes as part of Airflow orchestration
 
 ## Architecture
 
@@ -57,15 +58,16 @@ The project is configured with a `.python-version` file specifying Python 3.12, 
 
 ### 3. Set up the environment
 
-Run the setup script to initialize Airflow and PostgreSQL:
+Run the setup script to initialize Airflow, PostgreSQL, and dbt:
 
 ```bash
 chmod +x scripts/*.sh
-./scripts/setup_airflow.sh
+./scripts/setup.sh
 ```
 
 This will:
 - Create necessary directories
+- Set up dbt profiles for both local and container execution
 - Build and start Docker containers for Airflow and PostgreSQL
 - Set up an Airflow admin user
 - Display access information for the Airflow UI
@@ -80,48 +82,27 @@ Open http://localhost:8081 in your browser
 
 Place your CSV files in the `data/` directory and:
 
-1. Enable the `sales_data_pipeline` DAG in the Airflow UI
-2. Trigger the DAG manually or let it run on its schedule
+1. Enable both the `sales_data_pipeline` and `dbt_transform_pipeline` DAGs in the Airflow UI
+2. Trigger the `sales_data_pipeline` DAG manually or let it run on its schedule
+3. The `dbt_transform_pipeline` will automatically start after the ETL process completes
 
 ### 6. Run dbt models (optional)
-In order to run dbt jobs, a local development environment must be installed.
+
+You can run dbt models either locally or within the Airflow container using the provided script:
 
 ```bash
-# Set up dbt profile
-mkdir -p ~/.dbt
-cp misc/dbt_profile.yml ~/.dbt/profiles.yml
+# Run dbt locally
+./scripts/run_dbt.sh -f              # Run full process (deps, run, test, docs)
+./scripts/run_dbt.sh -m dim_location # Run only a specific model
+
+# Run dbt in Airflow container
+./scripts/run_dbt.sh -a -f           # Run full process in container
+./scripts/run_dbt.sh -a -m marts.*   # Run all models in marts directory in container
 ```
 
-#### Runs models with various options for flexibility.
-
-**Usage:**
+For all available options:
 ```bash
-./scripts/run_dbt.sh [OPTIONS]
-```
-
-**Options:**
-- `-h, --help`: Show help message
-- `-e, --env ENV`: Environment to run in (default: dev)
-- `-m, --models NAME`: Specific models to run (comma-separated, no spaces)
-- `-t, --test`: Run tests after models
-- `-d, --docs`: Generate documentation
-- `-f, --full`: Run full process (deps, run, test, docs)
-- `-c, --clean`: Run 'dbt clean' before other commands
-- `-s, --seed`: Run 'dbt seed' to load seed files
-
-**Examples:**
-```bash
-# Run the full workflow (dependencies, models, tests, docs)
-./scripts/run_dbt.sh -f
-
-# Run only a specific model
-./scripts/run_dbt.sh -m dim_location
-
-# Run all models in the marts directory
-./scripts/run_dbt.sh -m "marts.*"
-
-# Run in production environment with tests
-./scripts/run_dbt.sh -e prod -t
+./scripts/run_dbt.sh --help
 ```
 
 ## Project Structure
@@ -129,26 +110,29 @@ cp misc/dbt_profile.yml ~/.dbt/profiles.yml
 ```
 .
 ├── airflow/
-│   └── dags/                     # Airflow DAG definitions
-├── data/                         # Input data directory
-│   └── processed/                # Archived processed files
-├── data_ingestion/               # ETL process
-│   ├── ingest.py                 # Data ingestion script
-│   ├── transform.py              # Data transformation script
-│   └── utils.py                  # Shared utility functions
-├── dbt_transform/                # dbt project
+│   └── dags/                          # Airflow DAG definitions
+│       ├── sales_data_pipeline.py     # ETL pipeline DAG
+│       └── dbt_transform_dag.py       # dbt transformation DAG
+├── data/                              # Input data directory
+│   └── processed/                     # Archived processed files
+├── data_ingestion/                    # ETL process
+│   ├── ingest.py                      # Data ingestion script
+│   ├── transform.py                   # Data transformation script
+│   └── utils.py                       # Shared utility functions
+├── dbt_profiles/                      # dbt profiles for Airflow container
+├── dbt_transform/                     # dbt project
 │   ├── models/
-│   │   ├── marts/                # Dimensional models
-│   │   └── staging/              # Staging models
-│   └── macros/                   # dbt macros/tests
-├── initdb/                       # Database initialization
-├── misc/                         # Miscellaneous, including task description, data exploration and dbt profile
-├── scripts/                      # Execution scripts
-│   ├── setup-airflow.sh          # Airflow setup script
-│   └── run_dbt.sh                # dbt running script
-├── docker-compose.yml            # Docker Compose configuration
-├── Dockerfile.airflow            # Airflow container definition
-└── requirements-airflow          # Airflow dependencies
+│   │   ├── marts/                     # Dimensional models
+│   │   └── staging/                   # Staging models
+│   └── macros/                        # dbt macros/tests
+├── initdb/                            # Database initialization
+├── misc/                              # Miscellaneous files
+├── scripts/                           # Execution scripts
+│   ├── setup.sh                       # Setup script for Airflow with dbt
+│   └── run_dbt.sh                     # Enhanced dbt running script
+├── docker-compose.yml                 # Docker Compose configuration
+├── Dockerfile.airflow                 # Airflow container definition
+└── requirements-airflow.txt           # Airflow dependencies
 ```
 
 ## Data Models
@@ -163,12 +147,30 @@ cp misc/dbt_profile.yml ~/.dbt/profiles.yml
 - `dim_location`: Geographic locations
 - `fact_sales`: Sales transactions with foreign keys
 
+## dbt Integration
+
+The project uses a combined dbt profiles configuration that supports both local development and execution within the Airflow container. Key features:
+
+- **Multiple Targets**: `dev` (local), `airflow` (container)
+- **Enhanced Script**: Run dbt commands in either environment with a single script
+- **Airflow Integration**: Automatic execution of dbt as part of the data pipeline
+
+### dbt Local Setup
+
+The dbt profile is automatically configured in `~/.dbt/profiles.yml` during setup. For manual setup:
+
+```bash
+mkdir -p ~/.dbt
+cp dbt_profiles/profiles.yml ~/.dbt/profiles.yml
+```
+
 ## Maintenance
 
 ### Logs
 
 - Airflow logs: Available in the Airflow UI
 - Python logs: Check `data_processing.log`
+- dbt logs: Available in the Airflow UI task logs
 
 ### Database
 
@@ -194,12 +196,14 @@ psql -h localhost -p 5433 -U postgres -d sales
 
 ### Customizing the Pipeline
 
-1. Edit `airflow/dags/sales_data_pipeline.py` to add or modify tasks
-2. Modify `dbt_transform/dbt_project.yml` to configure dbt behavior
+1. Edit `airflow/dags/sales_data_pipeline.py` to add or modify ETL tasks
+2. Edit `airflow/dags/dbt_transform_dag.py` to customize dbt execution
+3. Modify `dbt_transform/dbt_project.yml` to configure dbt behavior
 
 ## Troubleshooting
 
 - **Port conflicts**: If port 5433 is already in use, modify the port mapping in `docker-compose.yml`
 - **Database connection issues**: Verify environment variables in `docker-compose.yml`
 - **Missing modules**: Check installed packages in the containers vs `requirements-airflow.txt`
-- **dbt errors**: Check `dbt_transform/target/` for detailed logs
+- **dbt errors**: Check Airflow task logs or run `./scripts/run_dbt.sh -a debug` to diagnose
+- **Profile issues**: Ensure the dbt profile is correctly set up in both locations
