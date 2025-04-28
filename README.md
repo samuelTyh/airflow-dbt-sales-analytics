@@ -10,13 +10,14 @@ This project implements a complete data engineering pipeline for processing sale
 - **Orchestration**: Apache Airflow DAGs for end-to-end pipeline execution
 - **Containerization**: Docker setup for reproducible environments
 - **Integrated dbt Workflow**: dbt executes as part of Airflow orchestration
+- **Self-healing Pipeline**: Automatically checks for data existence and performs ingestion when needed
 
 ## Architecture
 
 The pipeline follows a medallion architecture:
 
 1. **Bronze Layer**: Raw data ingestion (raw.sales)
-2. **Silver Layer**: Dimensional model with transformations (transformed.dim_\*, analytics.dim_\*)
+2. **Silver Layer**: Dimensional model with transformations (transformed.dim_*, analytics.dim_*)
 3. **Gold Layer**: Analytics models (analytics.fact_sales, transformed.fact_sales)
 
 ## Prerequisites
@@ -83,8 +84,8 @@ Open http://localhost:8081 in your browser
 Place your CSV files in the `data/` directory and:
 
 1. Enable both the `sales_data_pipeline` and `dbt_transform_pipeline` DAGs in the Airflow UI
-2. Trigger the `sales_data_pipeline` DAG manually or let it run on its schedule
-3. The `dbt_transform_pipeline` will automatically start after the ETL process completes
+2. Trigger either DAG manually or let them run on their schedules
+3. Both pipelines will check for data in the database and perform ingestion if needed
 
 ### 6. Run dbt models (optional)
 
@@ -110,9 +111,12 @@ For all available options:
 ```
 .
 ├── airflow/
-│   └── dags/                          # Airflow DAG definitions
-│       ├── sales_data_pipeline.py     # ETL pipeline DAG
-│       └── dbt_transform_dag.py       # dbt transformation DAG
+│   ├── dags/                          # Airflow DAG definitions
+│   │   ├── sales_data_pipeline.py     # ETL pipeline DAG
+│   │   └── dbt_transform_dag.py       # dbt transformation DAG
+│   └── plugins/
+│       └── utils/                     # Shared utility functions
+│           └── data_check.py          # Data existence check and auto-ingestion
 ├── data/                              # Input data directory
 │   └── processed/                     # Archived processed files
 ├── data_ingestion/                    # ETL process
@@ -134,6 +138,34 @@ For all available options:
 ├── Dockerfile.airflow                 # Airflow container definition
 └── requirements-airflow.txt           # Airflow dependencies
 ```
+
+## Smart Data Pipeline Features
+
+This pipeline includes several advanced features:
+
+### Self-healing Data Flow
+
+Both the ETL and dbt pipelines check for data existence before proceeding:
+
+1. Each DAG automatically checks for data in the `raw.sales` table
+2. If no data is found, ingestion is automatically triggered from the CSV
+3. Once data is available, the transformations proceed
+4. This allows either pipeline to be triggered independently without failures
+
+### Custom Database Connection
+
+The pipeline uses a custom database connection (`sales_db`) for all database operations:
+
+1. Connection is automatically created during Airflow initialization
+2. All tasks use this connection for consistent database access
+3. The connection is defined via environment variables in `docker-compose.yml`
+
+### Reusable Data Checking
+
+The shared `data_check.py` utility provides:
+- A custom sensor for checking data existence
+- Functions for auto-ingestion when needed
+- Task generation helpers for use in any DAG
 
 ## Data Models
 
