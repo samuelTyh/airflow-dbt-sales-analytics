@@ -32,8 +32,8 @@ The pipeline follows a medallion architecture:
 ### 1. Clone this repository
 
 ```bash
-git clone https://github.com/samuelTyh/hostaway-interview.git
-cd hostaway-interview
+git clone https://github.com/samuelTyh/airflow-dbt-sales-analytics.git
+cd airflow-dbt-sales-analytics
 ```
 
 ### 2. Local Development Setup (Optional)
