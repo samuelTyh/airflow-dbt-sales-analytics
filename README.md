@@ -83,16 +83,6 @@ Place your CSV files in the `data/` directory and:
 1. Enable the `sales_data_pipeline` DAG in the Airflow UI
 2. Trigger the DAG manually or let it run on its schedule
 
-Alternatively, you can run the pipeline components manually (Must set up local development):
-
-```bash
-# Ingest data
-python ingest.py data/generated_sales_data.csv
-
-# Transform data
-python data_ingestion/transform.py
-```
-
 ### 6. Run dbt models (optional)
 In order to run dbt jobs, a local development environment must be installed.
 
@@ -100,9 +90,38 @@ In order to run dbt jobs, a local development environment must be installed.
 # Set up dbt profile
 mkdir -p ~/.dbt
 cp misc/dbt_profile.yml ~/.dbt/profiles.yml
+```
 
-# Run dbt flow
+#### Runs models with various options for flexibility.
+
+**Usage:**
+```bash
+./scripts/run_dbt.sh [OPTIONS]
+```
+
+**Options:**
+- `-h, --help`: Show help message
+- `-e, --env ENV`: Environment to run in (default: dev)
+- `-m, --models NAME`: Specific models to run (comma-separated, no spaces)
+- `-t, --test`: Run tests after models
+- `-d, --docs`: Generate documentation
+- `-f, --full`: Run full process (deps, run, test, docs)
+- `-c, --clean`: Run 'dbt clean' before other commands
+- `-s, --seed`: Run 'dbt seed' to load seed files
+
+**Examples:**
+```bash
+# Run the full workflow (dependencies, models, tests, docs)
 ./scripts/run_dbt.sh -f
+
+# Run only a specific model
+./scripts/run_dbt.sh -m dim_location
+
+# Run all models in the marts directory
+./scripts/run_dbt.sh -m "marts.*"
+
+# Run in production environment with tests
+./scripts/run_dbt.sh -e prod -t
 ```
 
 ## Project Structure
